@@ -231,16 +231,17 @@ app.get('/tasks', async (req, res) => {
 
 app.post('/tasks', async (req, res) => {
     try {
-        const { title, description, dueDate, groupId, recurrence, taskMode, duration } = req.body;
+        const { title, description, dueDate, groupId, subtasks = [], recurrence, taskMode, duration } = req.body;
         const newTask = await prisma.task.create({
             data: {
                 userId: req.userId,
                 title, description,
                 dueDate: new Date(dueDate),
-                groupId: groupId || null,
+                groupId: groupId === '' ? null : groupId || null,
                 recurrence: recurrence || null,
                 taskMode: taskMode || 'completion',
                 duration: duration ? parseInt(duration) : null,
+                subtasks: { create: subtasks.map((s, i) => ({ title: s.title, order: i })) }
             },
             include: { group: true, subtasks: true }
         });
@@ -257,10 +258,9 @@ app.put('/tasks/:id', async (req, res) => {
         const updated = await prisma.task.update({
             where: { id: req.params.id },
             data: {
-                title,
-                description,
+                title, description,
                 dueDate: dueDate ? new Date(dueDate) : undefined,
-                groupId: groupId || null,
+                groupId: groupId === '' ? null : groupId || undefined,
                 recurrence: recurrence || null,
                 taskMode: taskMode || 'completion',
                 duration: duration ? parseInt(duration) : null,
@@ -387,12 +387,9 @@ app.post('/tasks/:id/completion-report', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Erro ao gerar relatório' }); }
 });
 
-app.patch('/tasks/:id/start', requireAuth, async (req, res) => {
+app.patch('/tasks/:id/start', async (req, res) => {
     try {
-        const task = await prisma.task.findFirst({
-            where: { id: req.params.id, userId: req.userId }
-        });
-
+        const task = await prisma.task.findFirst({ where: { id: req.params.id, userId: req.userId } });
         if (!task) return res.status(404).json({ error: 'Tarefa não encontrada' });
         if (task.taskMode !== 'scheduled') return res.status(400).json({ error: 'Modo inválido' });
         if (task.startedAt) return res.status(400).json({ error: 'Início já confirmado' });
@@ -405,9 +402,8 @@ app.patch('/tasks/:id/start', requireAuth, async (req, res) => {
         const updated = await prisma.task.update({
             where: { id: task.id },
             data: { startedAt, scheduledEndAt },
-            include: { subtasks: true }
+            include: { group: true, subtasks: true }
         });
-
         res.json(updated);
     } catch (e) {
         console.error('Erro ao confirmar início:', e);
