@@ -19,6 +19,8 @@ function generateResetToken() {
 }
 
 async function sendBrevoEmail({ to, toName, subject, html }) {
+    console.log('📧 Enviando email via Brevo para:', to);
+    console.log('🔑 API Key presente:', !!process.env.BREVO_API_KEY);
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
