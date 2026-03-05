@@ -21,12 +21,12 @@ function generateResetToken() {
 
 function createMailTransport() {
     return nodemailer.createTransport({
-        host: 'smtp.resend.com',
-        port: 465,
-        secure: true,
+        host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: false,
         auth: {
-            user: 'resend',
-            pass: process.env.RESEND_API_KEY
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
         }
     });
 }
@@ -36,7 +36,7 @@ async function sendResetEmail(email, token, name) {
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
 
     await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <onboarding@resend.dev>`,
+        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
         to: email,
         subject: '🔑 Redefinir sua senha — Agenda Inteligente',
         html: `
@@ -58,7 +58,7 @@ async function sendConfirmationEmail(email, token, name) {
     const confirmUrl = `${process.env.BACKEND_URL || 'http://localhost:3333'}/auth/confirm-email?token=${token}`;
 
     await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <onboarding@resend.dev>`,
+        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
         to: email,
         subject: '✅ Confirme seu email — Agenda Inteligente',
         html: `

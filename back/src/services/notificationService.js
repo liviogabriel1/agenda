@@ -1,6 +1,5 @@
 const nodemailer = require('nodemailer');
 
-// ─── Evolution API (WhatsApp) ─────────────────────────────────────────────────
 async function sendWhatsApp(phone, message) {
     const baseUrl = process.env.EVOLUTION_API_URL;
     const apiKey = process.env.EVOLUTION_API_KEY;
@@ -29,27 +28,25 @@ async function sendWhatsApp(phone, message) {
     return response.json();
 }
 
-// ─── Email (Resend via SMTP) ──────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
     const transporter = nodemailer.createTransport({
-        host: 'smtp.resend.com',
-        port: 465,
-        secure: true,
+        host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: false,
         auth: {
-            user: 'resend',
-            pass: process.env.RESEND_API_KEY
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
         }
     });
 
     await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <onboarding@resend.dev>`,
+        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
         to,
         subject,
         html
     });
 }
 
-// ─── Dispatcher ───────────────────────────────────────────────────────────────
 async function sendNotification(settings, { subject, whatsappText, emailHtml }) {
     const promises = [];
 
@@ -69,7 +66,6 @@ async function sendNotification(settings, { subject, whatsappText, emailHtml }) 
     });
 }
 
-// ─── Templates ────────────────────────────────────────────────────────────────
 function buildDueTodayMessage(tasks) {
     const list = tasks.map(t => `  • ${t.title}`).join('\n');
     return {
