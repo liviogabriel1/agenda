@@ -29,6 +29,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(cookieParser());
+app.set('trust proxy', 1); // necessário para rate-limit funcionar atrás de proxy (Railway/Render)
 app.use(express.json({ limit: '1mb' })); // limita payload para evitar DoS
 
 // Rate limiter para rotas de auth
@@ -550,6 +551,8 @@ app.get('/stats', async (req, res) => {
         });
     } catch (e) { res.status(500).json({ error: 'Erro nas stats' }); }
 });
+
+// /test-smtp removido por segurança (expunha infra em produção)
 
 // ─── START ───────────────────────────────────────────────────────────────────
 
