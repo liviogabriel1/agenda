@@ -24,26 +24,24 @@ const prisma = new PrismaClient();
 
 const corsOptions = {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true, // necessário para cookies HttpOnly
+    credentials: true,
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.set('trust proxy', 1); // necessário para rate-limit funcionar atrás de proxy (Railway/Render)
-app.use(express.json({ limit: '1mb' })); // limita payload para evitar DoS
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '1mb' }));
 
-// Rate limiter para rotas de auth
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 tentativas por IP
+    windowMs: 15 * 60 * 1000,
+    max: 20,
     message: { error: 'Muitas tentativas. Aguarde 15 minutos.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
 
-// Rate limiter para rotas de IA (custoso)
 const aiLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minuto
+    windowMs: 60 * 1000,
     max: 10,
     message: { error: 'Limite de requisições IA atingido. Aguarde um momento.' },
 });
@@ -307,19 +305,40 @@ app.post('/tasks/analyze', aiLimiter, async (req, res) => {
     try {
         const pendingTasks = await prisma.task.findMany({
             where: { userId: req.userId, aiPriority: null, completedAt: null },
-            select: { id: true, title: true, description: true, dueDate: true }
+            select: { id: true, title: true, description: true, dueDate: true },
+            take: 10
         });
-        if (pendingTasks.length === 0) return res.json({ message: 'Nada para analisar!', updatedCount: 0 });
+
+        if (pendingTasks.length === 0) {
+            return res.json({ message: 'Todas as tarefas já foram analisadas! 🎉', updatedCount: 0 });
+        }
 
         const aiResults = await analyzeTasks(pendingTasks);
+
         await Promise.all(aiResults.map(r => prisma.task.update({
             where: { id: r.id },
             data: { aiPriority: r.aiPriority, aiSuggestion: r.aiSuggestion }
         })));
-        res.json({ message: 'Analisadas!', updatedCount: aiResults.length });
+
+        const totalRemaining = await prisma.task.count({
+            where: { userId: req.userId, aiPriority: null, completedAt: null }
+        });
+
+        if (totalRemaining > 0) {
+            res.json({
+                message: `Lote de ${aiResults.length} tarefas analisado! Faltam ${totalRemaining}. Clique novamente para continuar. ⏳`,
+                updatedCount: aiResults.length
+            });
+        } else {
+            res.json({
+                message: 'Todas as tarefas foram analisadas com sucesso! 🚀',
+                updatedCount: aiResults.length
+            });
+        }
+
     } catch (e) {
         console.error('🔥 Erro na rota POST /tasks/analyze:', e);
-        res.status(500).json({ error: 'Erro na análise IA' });
+        res.status(500).json({ error: 'Erro na análise IA. Verifique os logs.' });
     }
 });
 
@@ -406,7 +425,6 @@ app.post('/ai/chat', aiLimiter, async (req, res) => {
         const rawHistory = req.body.history || [];
         if (!rawMessage) return res.status(400).json({ error: 'Mensagem vazia.' });
 
-        // Sanitiza entradas para evitar prompt injection excessivo
         const message = String(rawMessage).slice(0, 2000);
         const history = rawHistory.slice(0, 10).map(h => ({
             role: String(h.role || '').slice(0, 10),
@@ -557,8 +575,6 @@ app.get('/stats', async (req, res) => {
         });
     } catch (e) { res.status(500).json({ error: 'Erro nas stats' }); }
 });
-
-// /test-smtp removido por segurança (expunha infra em produção)
 
 // ─── START ───────────────────────────────────────────────────────────────────
 
