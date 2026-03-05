@@ -2,7 +2,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function analyzeTasks(tasks) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `Você é um assistente de produtividade. Analise estas tarefas e retorne APENAS um JSON array com:
 - "id": ID original
 - "aiPriority": "Alta", "Média" ou "Baixa"
@@ -16,7 +16,7 @@ Tarefas: ${JSON.stringify(tasks)}`;
 }
 
 async function chatWithAI(userMessage, tasks, history = []) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const historyText = history.map(h => `${h.role === 'user' ? 'Usuário' : 'Assistente'}: ${h.text}`).join('\n');
     const prompt = `Você é o assistente pessoal de produtividade da "Agenda Inteligente".
 Tarefas atuais do usuário: ${JSON.stringify(tasks)}
@@ -32,7 +32,7 @@ Use as tarefas para dar conselhos personalizados.`;
 }
 
 async function parseTaskFromMessage(message) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const today = new Date().toISOString().split('T')[0];
     const prompt = `Extraia os dados desta mensagem para criar uma tarefa. Retorne APENAS JSON puro:
 {
@@ -53,7 +53,7 @@ Mensagem: "${message}"`;
 }
 
 async function generateCompletionReport(task) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const dueDate = new Date(task.dueDate);
     const completedAt = new Date(task.completedAt);
