@@ -1,4 +1,3 @@
-// api.js
 import axios from 'axios';
 
 export const api = axios.create({
@@ -12,7 +11,9 @@ api.interceptors.response.use(
         if (err.response?.status === 401) {
             localStorage.removeItem('agenda_user');
             localStorage.removeItem('agenda_token');
-            window.location.href = '/';
+            if (err.config && !err.config.url.includes('/auth/me')) {
+                window.location.href = '/';
+            }
         }
         return Promise.reject(err);
     }
