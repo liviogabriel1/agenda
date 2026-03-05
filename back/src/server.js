@@ -335,7 +335,10 @@ app.post('/tasks/:id/analyze', async (req, res) => {
             include: { group: true, subtasks: true }
         });
         res.json(updated);
-    } catch (e) { res.status(500).json({ error: 'Erro ao re-analisar' }); }
+    } catch (e) {
+        console.error('Erro na rota /tasks/:id/analyze:', e);
+        res.status(500).json({ error: 'Erro ao re-analisar' });
+    }
 });
 
 app.post('/tasks/:id/completion-report', async (req, res) => {
