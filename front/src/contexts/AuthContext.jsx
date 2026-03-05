@@ -9,24 +9,32 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const savedUser = localStorage.getItem('agenda_user');
-        if (savedUser) {
+        const token = localStorage.getItem('agenda_token');
+
+        if (savedUser && token) {
             try {
                 setUser(JSON.parse(savedUser));
             } catch {
                 localStorage.removeItem('agenda_user');
+                localStorage.removeItem('agenda_token');
             }
         }
 
-        api.get('/auth/me')
-            .then(({ data }) => {
-                setUser(data.user);
-                localStorage.setItem('agenda_user', JSON.stringify(data.user));
-            })
-            .catch(() => {
-                setUser(null);
-                localStorage.removeItem('agenda_user');
-            })
-            .finally(() => setLoading(false));
+        if (token) {
+            api.get('/auth/me')
+                .then(({ data }) => {
+                    setUser(data.user);
+                    localStorage.setItem('agenda_user', JSON.stringify(data.user));
+                })
+                .catch(() => {
+                    setUser(null);
+                    localStorage.removeItem('agenda_user');
+                    localStorage.removeItem('agenda_token');
+                })
+                .finally(() => setLoading(false));
+        } else {
+            setLoading(false);
+        }
 
         const handleStorage = () => {
             const u = localStorage.getItem('agenda_user');
@@ -36,7 +44,8 @@ export function AuthProvider({ children }) {
         return () => window.removeEventListener('storage', handleStorage);
     }, []);
 
-    const login = (userData) => {
+    const login = (token, userData) => {
+        localStorage.setItem('agenda_token', token);
         localStorage.setItem('agenda_user', JSON.stringify(userData));
         setUser(userData);
     };
@@ -46,6 +55,7 @@ export function AuthProvider({ children }) {
             await api.post('/auth/logout');
         } catch {
         } finally {
+            localStorage.removeItem('agenda_token');
             localStorage.removeItem('agenda_user');
             setUser(null);
         }
