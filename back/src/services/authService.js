@@ -24,6 +24,7 @@ function createMailTransport() {
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
         port: Number(process.env.SMTP_PORT) || 465,
         secure: true,
+        family: 4, // força IPv4 (Railway não suporta IPv6 para SMTP)
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
