@@ -1,27 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { api } from '../services/api';
 import { TaskCard } from '../components/TaskCard';
 
 export function Concluidas() {
-    const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(true);
 
-    const fetchTasks = async () => {
-        try {
+    // Buscar tarefas do cache
+    const { data: tasks = [], isLoading } = useQuery({
+        queryKey: ['tasks'],
+        queryFn: async () => {
             const response = await api.get('/tasks');
-            setTasks(response.data.filter(task => task.completedAt));
-        } catch (error) {
-            console.error("Erro ao buscar tarefas:", error);
-        } finally {
-            setLoading(false);
+            return response.data;
         }
-    };
+    });
 
-    useEffect(() => {
-        fetchTasks();
-    }, []);
+    // Filtramos apenas as concluídas
+    const completedTasks = tasks.filter(task => task.completedAt);
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -31,20 +26,20 @@ export function Concluidas() {
                 </div>
                 <div>
                     <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Histórico</h1>
-                    <p className="text-gray-500 font-medium">O seu mural de conquistas. {tasks.length} {tasks.length === 1 ? 'tarefa finalizada' : 'tarefas finalizadas'}.</p>
+                    <p className="text-gray-500 font-medium">O seu mural de conquistas. {completedTasks.length} {completedTasks.length === 1 ? 'tarefa finalizada' : 'tarefas finalizadas'}.</p>
                 </div>
             </header>
 
-            {loading ? (
+            {isLoading ? (
                 <div className="flex justify-center py-12"><Loader2 size={32} className="text-emerald-500 animate-spin" /></div>
-            ) : tasks.length === 0 ? (
+            ) : completedTasks.length === 0 ? (
                 <div className="text-center py-16 bg-white/40 backdrop-blur-md rounded-3xl border border-dashed border-emerald-200">
-                    <p className="text-gray-500 font-medium">Você ainda não concluiu nenhuma tarefa.</p>
+                    <p className="text-gray-500 font-medium">Ainda não concluiu nenhuma tarefa.</p>
                 </div>
             ) : (
                 <motion.div layout className="flex flex-col gap-4">
                     <AnimatePresence mode='popLayout'>
-                        {tasks.map(task => (
+                        {completedTasks.map(task => (
                             <TaskCard key={task.id} task={task} />
                         ))}
                     </AnimatePresence>

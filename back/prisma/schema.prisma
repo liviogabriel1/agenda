@@ -7,19 +7,75 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Task {
-  id           String    @id @default(uuid())
-  title        String
-  description  String?
-  dueDate      DateTime  @map("due_date")
-  completedAt  DateTime? @map("completed_at")
-  notes        String?
-  
-  aiPriority   String?   @map("ai_priority")
-  aiSuggestion String?   @map("ai_suggestion")
-  
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+model User {
+  id               String        @id @default(cuid())
+  name             String
+  email            String        @unique
+  passwordHash     String
+  emailVerified        Boolean       @default(false)
+  emailVerifyToken     String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime      @default(now())
+  settings         UserSettings?
+  tasks            Task[]
+  groups           Group[]
+}
 
-  @@map("tasks")
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  whatsapp           String?
+  email              String?
+  notifyChannel      String   @default("email")
+  notifyDueToday     Boolean  @default(true)
+  notifyOverdue      Boolean  @default(true)
+  notifyDailySummary Boolean  @default(true)
+  notifyOnComplete   Boolean  @default(true)
+  dailySummaryHour   Int      @default(8)
+  onboardingDone     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  dueTodayHour  Int @default(9)
+  overdueHour   Int @default(10)
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  color     String   @default("purple")
+  tasks     Task[]
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  title            String
+  description      String?
+  dueDate          DateTime
+  completedAt      DateTime?
+  notes            String?
+  aiPriority       String?
+  aiSuggestion     String?
+  recurrence       String?
+  completionReport Json?
+  groupId          String?
+  group            Group?    @relation(fields: [groupId], references: [id])
+  subtasks         Subtask[]
+  createdAt        DateTime  @default(now())
+}
+
+model Subtask {
+  id          String    @id @default(cuid())
+  title       String
+  completedAt DateTime?
+  order       Int       @default(0)
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id])
+  createdAt   DateTime  @default(now())
 }
