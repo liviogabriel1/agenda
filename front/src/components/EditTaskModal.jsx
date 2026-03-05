@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { X, Save, Plus, Trash2, RefreshCw, CheckCircle2, Timer } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from './Toast';
 
@@ -12,10 +12,26 @@ const recurrenceOptions = [
     { value: 'monthly', label: 'Todo mês' },
 ];
 
+// Opções de duração pré-definidas (em minutos)
+const durationOptions = [
+    { value: 15, label: '15 min' },
+    { value: 30, label: '30 min' },
+    { value: 45, label: '45 min' },
+    { value: 60, label: '1 hora' },
+    { value: 90, label: '1h 30min' },
+    { value: 120, label: '2 horas' },
+    { value: 180, label: '3 horas' },
+    { value: 240, label: '4 horas' },
+    { value: 480, label: '8 horas' },
+];
+
 export function EditTaskModal({ task, onClose }) {
     const qc = useQueryClient();
     const toast = useToast();
-    const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: async () => (await api.get('/groups')).data });
+    const { data: groups = [] } = useQuery({
+        queryKey: ['groups'],
+        queryFn: async () => (await api.get('/groups')).data
+    });
 
     const [form, setForm] = useState({
         title: task.title,
@@ -23,6 +39,8 @@ export function EditTaskModal({ task, onClose }) {
         dueDate: task.dueDate ? task.dueDate.slice(0, 16) : '',
         groupId: task.groupId || '',
         recurrence: task.recurrence || '',
+        taskMode: task.taskMode || 'completion',
+        duration: task.duration || '',
     });
     const [newSubtask, setNewSubtask] = useState('');
 
@@ -57,6 +75,13 @@ export function EditTaskModal({ task, onClose }) {
         pink: 'border-pink-400 bg-pink-50', gray: 'border-gray-400 bg-gray-50',
     };
 
+    const handleSubmit = () => {
+        updateMutation.mutate({
+            ...form,
+            duration: form.duration ? parseInt(form.duration) : null,
+        });
+    };
+
     return (
         <AnimatePresence>
             <motion.div
@@ -79,7 +104,60 @@ export function EditTaskModal({ task, onClose }) {
                     </div>
 
                     <div className="p-6 space-y-5">
-                        {/* Título */}
+
+                        {/* ── Modo da Tarefa ─────────────────────────────────── */}
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                Modo da Tarefa
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, taskMode: 'completion', duration: '' })}
+                                    className={`flex flex-col items-start gap-1.5 px-4 py-3 rounded-xl border-2 transition-all text-left ${form.taskMode === 'completion'
+                                            ? 'border-emerald-400 bg-emerald-50'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle2 size={16} className={form.taskMode === 'completion' ? 'text-emerald-600' : 'text-gray-400'} />
+                                        <span className={`text-sm font-bold ${form.taskMode === 'completion' ? 'text-emerald-700' : 'text-gray-600'}`}>
+                                            Conclusão
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 leading-tight">Tarefa com prazo a cumprir</p>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, taskMode: 'scheduled' })}
+                                    className={`flex flex-col items-start gap-1.5 px-4 py-3 rounded-xl border-2 transition-all text-left ${form.taskMode === 'scheduled'
+                                            ? 'border-purple-400 bg-purple-50'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Timer size={16} className={form.taskMode === 'scheduled' ? 'text-purple-600' : 'text-gray-400'} />
+                                        <span className={`text-sm font-bold ${form.taskMode === 'scheduled' ? 'text-purple-700' : 'text-gray-600'}`}>
+                                            Agendado
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 leading-tight">Lembrete de início + duração</p>
+                                </button>
+                            </div>
+
+                            {form.taskMode === 'scheduled' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 leading-relaxed"
+                                >
+                                    📬 Aviso <strong>30 min antes</strong>. Ao confirmar o início, a tarefa é concluída automaticamente após a duração definida.
+                                </motion.div>
+                            )}
+                        </div>
+
+                        {/* ── Título ──────────────────────────────────────────── */}
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Título</label>
                             <input
@@ -89,7 +167,7 @@ export function EditTaskModal({ task, onClose }) {
                             />
                         </div>
 
-                        {/* Descrição */}
+                        {/* ── Descrição ───────────────────────────────────────── */}
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Descrição</label>
                             <textarea
@@ -100,8 +178,42 @@ export function EditTaskModal({ task, onClose }) {
                             />
                         </div>
 
-                        {/* Data e Recorrência */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* ── Data + Duração (scheduled) ou Data + Recorrência (completion) ── */}
+                        {form.taskMode === 'scheduled' ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                        Horário de início
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        value={form.dueDate}
+                                        onChange={e => setForm({ ...form, dueDate: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                        <Timer size={11} /> Duração
+                                    </label>
+                                    <select
+                                        value={form.duration}
+                                        onChange={e => setForm({ ...form, duration: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
+                                    >
+                                        <option value="">Sem duração fixa</option>
+                                        {durationOptions.map(o => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
+                                    {form.duration && (
+                                        <p className="text-xs text-purple-600 mt-1.5 font-medium">
+                                            ✓ Concluirá automaticamente após {durationOptions.find(o => o.value === parseInt(form.duration))?.label}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Data</label>
                                 <input
@@ -111,21 +223,23 @@ export function EditTaskModal({ task, onClose }) {
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
                                 />
                             </div>
-                            <div>
-                                <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                                    <RefreshCw size={11} /> Recorrência
-                                </label>
-                                <select
-                                    value={form.recurrence}
-                                    onChange={e => setForm({ ...form, recurrence: e.target.value })}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
-                                >
-                                    {recurrenceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
-                            </div>
+                        )}
+
+                        {/* Recorrência — aparece nos dois modos */}
+                        <div>
+                            <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                <RefreshCw size={11} /> Recorrência
+                            </label>
+                            <select
+                                value={form.recurrence}
+                                onChange={e => setForm({ ...form, recurrence: e.target.value })}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
+                            >
+                                {recurrenceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
                         </div>
 
-                        {/* Grupo */}
+                        {/* ── Grupo ───────────────────────────────────────────── */}
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Grupo</label>
                             <div className="flex flex-wrap gap-2">
@@ -149,40 +263,42 @@ export function EditTaskModal({ task, onClose }) {
                             </div>
                         </div>
 
-                        {/* Subtarefas */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subtarefas</label>
-                            <div className="space-y-2 mb-3">
-                                {task.subtasks?.map(sub => (
-                                    <div key={sub.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                                        <button onClick={() => toggleSubtaskMutation.mutate(sub.id)} className="shrink-0">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sub.completedAt ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}>
-                                                {sub.completedAt && <span className="text-white text-xs">✓</span>}
-                                            </div>
-                                        </button>
-                                        <span className={`flex-1 text-sm ${sub.completedAt ? 'line-through text-gray-400' : 'text-gray-700'}`}>{sub.title}</span>
-                                        <button onClick={() => deleteSubtaskMutation.mutate(sub.id)} className="p-1 hover:bg-red-100 rounded-lg transition-colors">
-                                            <Trash2 size={14} className="text-red-400" />
-                                        </button>
-                                    </div>
-                                ))}
+                        {/* ── Subtarefas (apenas modo completion) ─────────────── */}
+                        {form.taskMode === 'completion' && (
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subtarefas</label>
+                                <div className="space-y-2 mb-3">
+                                    {task.subtasks?.map(sub => (
+                                        <div key={sub.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                            <button onClick={() => toggleSubtaskMutation.mutate(sub.id)} className="shrink-0">
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sub.completedAt ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}>
+                                                    {sub.completedAt && <span className="text-white text-xs">✓</span>}
+                                                </div>
+                                            </button>
+                                            <span className={`flex-1 text-sm ${sub.completedAt ? 'line-through text-gray-400' : 'text-gray-700'}`}>{sub.title}</span>
+                                            <button onClick={() => deleteSubtaskMutation.mutate(sub.id)} className="p-1 hover:bg-red-100 rounded-lg transition-colors">
+                                                <Trash2 size={14} className="text-red-400" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        value={newSubtask}
+                                        onChange={e => setNewSubtask(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && newSubtask.trim() && addSubtaskMutation.mutate(newSubtask.trim())}
+                                        placeholder="Adicionar subtarefa..."
+                                        className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
+                                    />
+                                    <button
+                                        onClick={() => newSubtask.trim() && addSubtaskMutation.mutate(newSubtask.trim())}
+                                        className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <input
-                                    value={newSubtask}
-                                    onChange={e => setNewSubtask(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && newSubtask.trim() && addSubtaskMutation.mutate(newSubtask.trim())}
-                                    placeholder="Adicionar subtarefa..."
-                                    className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-purple-400 rounded-xl outline-none text-sm transition-colors"
-                                />
-                                <button
-                                    onClick={() => newSubtask.trim() && addSubtaskMutation.mutate(newSubtask.trim())}
-                                    className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     <div className="p-6 border-t border-gray-100 flex gap-3">
@@ -190,7 +306,7 @@ export function EditTaskModal({ task, onClose }) {
                             Cancelar
                         </button>
                         <button
-                            onClick={() => updateMutation.mutate(form)}
+                            onClick={handleSubmit}
                             disabled={updateMutation.isPending}
                             className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                         >

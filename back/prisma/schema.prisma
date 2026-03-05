@@ -69,6 +69,11 @@ model Task {
   group            Group?    @relation(fields: [groupId], references: [id])
   subtasks         Subtask[]
   createdAt        DateTime  @default(now())
+  taskMode          String    @default("completion")
+  duration          Int?
+  startedAt         DateTime?
+  scheduledEndAt    DateTime?
+  startReminderSent Boolean   @default(false)
 }
 
 model Subtask {

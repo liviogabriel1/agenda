@@ -66,6 +66,8 @@ async function sendNotification(settings, { subject, whatsappText, emailHtml }) 
     });
 }
 
+// ─── Builders existentes ──────────────────────────────────────────────────
+
 function buildDueTodayMessage(tasks) {
     const list = tasks.map(t => `  • ${t.title}`).join('\n');
     return {
@@ -100,4 +102,90 @@ function buildCompletionMessage(task) {
     };
 }
 
-module.exports = { sendNotification, buildDueTodayMessage, buildOverdueMessage, buildDailySummaryMessage, buildCompletionMessage };
+// ─── Builders para modo "scheduled" ──────────────────────────────────────
+
+/**
+ * Lembrete 30 minutos antes do horário agendado
+ */
+function buildScheduledReminderMessage(task) {
+    const time = new Date(task.dueDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const durationText = task.duration ? ` · Duração: ${task.duration >= 60
+        ? `${Math.floor(task.duration / 60)}h${task.duration % 60 > 0 ? ` ${task.duration % 60}min` : ''}`
+        : `${task.duration}min`}` : '';
+
+    return {
+        subject: `⏰ Lembrete: "${task.title}" começa em 30 minutos`,
+        whatsappText: `⏰ *Agenda Inteligente*\n\nDaqui a *30 minutos* começa:\n\n📌 *${task.title}*\n🕐 Horário: *${time}*${durationText}\n\nSe prepare! ✨`,
+        emailHtml: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f9f5ff;border-radius:16px;">
+                <h2 style="color:#7c3aed;margin-bottom:4px;">⏰ Lembrete — 30 minutos</h2>
+                <p style="color:#6b7280;margin-top:0;">A seguinte atividade começa em breve:</p>
+                <div style="background:#fff;border-left:4px solid #7c3aed;padding:16px 20px;border-radius:8px;margin:16px 0;">
+                    <strong style="font-size:18px;color:#111;">${task.title}</strong>
+                    ${task.description ? `<p style="color:#6b7280;margin:8px 0 0;">${task.description}</p>` : ''}
+                    <p style="color:#7c3aed;font-weight:700;margin:8px 0 0;">🕐 ${time}${durationText}</p>
+                </div>
+                <p style="color:#9ca3af;font-size:12px;">Confirme o início no app quando começar para registrar sua pontualidade.</p>
+            </div>
+        `
+    };
+}
+
+/**
+ * Alerta de atraso: passou do horário e não confirmou início
+ */
+function buildScheduledLateMessage(task, minutesLate) {
+    const time = new Date(task.dueDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return {
+        subject: `⚠️ Atraso: "${task.title}" deveria ter começado às ${time}`,
+        whatsappText: `⚠️ *Agenda Inteligente*\n\nVocê ainda não confirmou o início de:\n\n📌 *${task.title}*\n🕐 Horário previsto: *${time}*\n⏱ Atraso: *${minutesLate} min*\n\nAinda dá tempo! Confirme no app. 💪`,
+        emailHtml: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff7ed;border-radius:16px;">
+                <h2 style="color:#ea580c;margin-bottom:4px;">⚠️ Início em atraso</h2>
+                <p style="color:#6b7280;margin-top:0;">Você ainda não confirmou o início desta atividade:</p>
+                <div style="background:#fff;border-left:4px solid #ea580c;padding:16px 20px;border-radius:8px;margin:16px 0;">
+                    <strong style="font-size:18px;color:#111;">${task.title}</strong>
+                    <p style="color:#ea580c;font-weight:700;margin:8px 0 0;">🕐 Previsto: ${time} · Atraso: ${minutesLate} min</p>
+                </div>
+                <p style="color:#6b7280;font-size:13px;">Se já começou, confirme o início no app para registrar corretamente.</p>
+            </div>
+        `
+    };
+}
+
+/**
+ * Conclusão automática após fim do tempo de duração
+ */
+function buildAutoCompletedMessage(task) {
+    const startedAt = new Date(task.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const endedAt = new Date(task.scheduledEndAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const durationText = task.duration >= 60
+        ? `${Math.floor(task.duration / 60)}h${task.duration % 60 > 0 ? ` ${task.duration % 60}min` : ''}`
+        : `${task.duration}min`;
+
+    return {
+        subject: `✅ Concluído automaticamente: "${task.title}"`,
+        whatsappText: `✅ *Agenda Inteligente*\n\n*${task.title}* foi concluído automaticamente!\n\n🕐 Início: *${startedAt}*\n🏁 Fim: *${endedAt}*\n⏱ Duração: *${durationText}*`,
+        emailHtml: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f0fdf4;border-radius:16px;">
+                <h2 style="color:#16a34a;margin-bottom:4px;">✅ Concluído automaticamente!</h2>
+                <p style="color:#6b7280;margin-top:0;">Sua atividade foi registrada como concluída:</p>
+                <div style="background:#fff;border-left:4px solid #16a34a;padding:16px 20px;border-radius:8px;margin:16px 0;">
+                    <strong style="font-size:18px;color:#111;">${task.title}</strong>
+                    <p style="color:#6b7280;margin:8px 0 0;">Início: <strong>${startedAt}</strong> · Fim: <strong>${endedAt}</strong> · <strong>${durationText}</strong></p>
+                </div>
+            </div>
+        `
+    };
+}
+
+module.exports = {
+    sendNotification,
+    buildDueTodayMessage,
+    buildOverdueMessage,
+    buildDailySummaryMessage,
+    buildCompletionMessage,
+    buildScheduledReminderMessage,
+    buildScheduledLateMessage,
+    buildAutoCompletedMessage,
+};

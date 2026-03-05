@@ -1,14 +1,19 @@
 import { useState, forwardRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, isAfter, parseISO } from 'date-fns';
+import { format, isAfter, parseISO, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, Calendar, Sparkles, AlertTriangle, ChevronDown, FolderOpen, Pencil, Trash2, RefreshCw, BrainCircuit, Loader2 } from 'lucide-react';
+import {
+    CheckCircle2, Calendar, Sparkles, AlertTriangle, ChevronDown,
+    FolderOpen, Pencil, Trash2, RefreshCw, BrainCircuit, Loader2,
+    PlayCircle, Timer
+} from 'lucide-react';
 import { api } from '../services/api';
 import { EditTaskModal } from './EditTaskModal';
 import { useToast } from './Toast';
 
-// ─── SubtaskItem ─────────────────────────────────────────────────────────────
+// ─── SubtaskItem ──────────────────────────────────────────────────────────────
+
 function SubtaskItem({ sub }) {
     const qc = useQueryClient();
 
@@ -42,6 +47,7 @@ function SubtaskItem({ sub }) {
 }
 
 // ─── CompletionReport ─────────────────────────────────────────────────────────
+
 function CompletionReport({ report, completedAt }) {
     const { score, difficulty, timeAssessment, feedback, badge } = report;
 
@@ -104,7 +110,37 @@ function CompletionReport({ report, completedAt }) {
     );
 }
 
+// ─── Helpers scheduled ───────────────────────────────────────────────────────
+
+function formatDuration(minutes) {
+    if (!minutes) return null;
+    if (minutes < 60) return `${minutes}min`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function getScheduledStatus(task) {
+    const now = new Date();
+    const due = new Date(task.dueDate);
+    const diffMin = Math.round((now - due) / 60000);
+
+    if (task.startedAt) {
+        if (task.scheduledEndAt) {
+            const remaining = Math.round((new Date(task.scheduledEndAt) - now) / 60000);
+            if (remaining > 0) return { label: `Em andamento · ${remaining}min restantes`, color: 'emerald', icon: '▶️' };
+        }
+        const startedDiff = Math.round((new Date(task.startedAt) - due) / 60000);
+        if (startedDiff <= 0) return { label: 'Iniciado no prazo', color: 'emerald', icon: '✅' };
+        return { label: `Iniciado ${startedDiff}min atrasado`, color: 'orange', icon: '⏱' };
+    }
+    if (diffMin > 0) return { label: `${diffMin}min de atraso`, color: 'red', icon: '⚠️' };
+    if (diffMin > -30) return { label: 'Em breve', color: 'purple', icon: '⏰' };
+    return { label: 'Agendado', color: 'blue', icon: '📅' };
+}
+
 // ─── TaskCard ─────────────────────────────────────────────────────────────────
+
 export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
     const qc = useQueryClient();
     const toast = useToast();
@@ -114,9 +150,33 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
     const [notes, setNotes] = useState('');
     const [completedDate, setCompletedDate] = useState(new Date().toISOString().slice(0, 16));
 
-    const isLate = isAfter(new Date(completedDate), parseISO(task.dueDate));
     const isAlreadyCompleted = !!task.completedAt;
+    const isScheduled = task.taskMode === 'scheduled';
+    const isInProgress = isScheduled && !!task.startedAt && !isAlreadyCompleted;
+    const isLate = isAfter(new Date(completedDate), parseISO(task.dueDate));
 
+    const scheduledStatus = isScheduled ? getScheduledStatus(task) : null;
+
+    const recurrenceLabel = { daily: 'Diária', weekly: 'Semanal', monthly: 'Mensal' };
+    const completedSubtasks = task.subtasks?.filter(s => s.completedAt).length || 0;
+    const totalSubtasks = task.subtasks?.length || 0;
+
+    const groupColors = {
+        purple: 'bg-purple-100 text-purple-700 border-purple-200',
+        blue: 'bg-blue-100 text-blue-700 border-blue-200',
+        emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+        orange: 'bg-orange-100 text-orange-700 border-orange-200',
+        pink: 'bg-pink-100 text-pink-700 border-pink-200',
+        gray: 'bg-gray-100 text-gray-700 border-gray-200',
+    };
+
+    const priorityColors = {
+        'Alta': 'bg-red-100 text-red-700 border-red-200',
+        'Média': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+        'Baixa': 'bg-blue-100 text-blue-700 border-blue-200',
+    };
+
+    // Mutações
     const deleteMutation = useMutation({
         mutationFn: async () => (await api.delete(`/tasks/${task.id}`)).data,
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast({ message: 'Tarefa removida', type: 'info' }); },
@@ -129,25 +189,17 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
         onError: () => toast({ message: 'Erro na análise', type: 'error' })
     });
 
-    const priorityColors = {
-        'Alta': 'bg-red-100 text-red-700 border-red-200',
-        'Média': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-        'Baixa': 'bg-blue-100 text-blue-700 border-blue-200',
-    };
-
-    const groupColors = {
-        purple: 'bg-purple-100 text-purple-700 border-purple-200',
-        blue: 'bg-blue-100 text-blue-700 border-blue-200',
-        emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-        orange: 'bg-orange-100 text-orange-700 border-orange-200',
-        pink: 'bg-pink-100 text-pink-700 border-pink-200',
-        gray: 'bg-gray-100 text-gray-700 border-gray-200',
-    };
-
-    const recurrenceLabel = { daily: 'Diária', weekly: 'Semanal', monthly: 'Mensal' };
-
-    const completedSubtasks = task.subtasks?.filter(s => s.completedAt).length || 0;
-    const totalSubtasks = task.subtasks?.length || 0;
+    const startMutation = useMutation({
+        mutationFn: async () => (await api.patch(`/tasks/${task.id}/start`)).data,
+        onSuccess: (data) => {
+            qc.invalidateQueries({ queryKey: ['tasks'] });
+            const msg = data.scheduledEndAt
+                ? `Iniciado! Concluirá automaticamente em ${formatDuration(task.duration)} 🚀`
+                : 'Início confirmado! 🚀';
+            toast({ message: msg, type: 'success' });
+        },
+        onError: () => toast({ message: 'Erro ao confirmar início', type: 'error' })
+    });
 
     const handleComplete = async () => {
         if (onComplete) await onComplete(task.id, { completedAt: new Date(completedDate).toISOString(), notes });
@@ -173,14 +225,23 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 className={`relative p-5 sm:p-6 rounded-3xl border backdrop-blur-lg transition-all duration-300 group ${isAlreadyCompleted
-                    ? 'bg-white/40 border-white/40 opacity-70 grayscale-[0.3]'
-                    : 'bg-white/70 border-white/60 shadow-xl shadow-purple-900/5 hover:shadow-purple-900/10 hover:-translate-y-1'
+                        ? 'bg-white/40 border-white/40 opacity-70 grayscale-[0.3]'
+                        : isInProgress
+                            ? 'bg-white/70 border-emerald-200 shadow-xl shadow-emerald-900/5 hover:shadow-emerald-900/10 hover:-translate-y-1'
+                            : isScheduled
+                                ? 'bg-white/70 border-purple-200/60 shadow-xl shadow-purple-900/5 hover:shadow-purple-900/10 hover:-translate-y-1'
+                                : 'bg-white/70 border-white/60 shadow-xl shadow-purple-900/5 hover:shadow-purple-900/10 hover:-translate-y-1'
                     }`}
             >
-                {/* Botões de ação */}
+                {/* ── Botões de ação (hover) ─────────────────────────────── */}
                 {!isAlreadyCompleted && (
                     <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-white/60 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none p-1 rounded-xl">
-                        <button onClick={() => analyzeMutation.mutate()} disabled={analyzeMutation.isPending} title="Re-analisar com IA" className="p-2 bg-purple-100 hover:bg-purple-200 text-purple-600 rounded-xl transition-colors">
+                        <button
+                            onClick={() => analyzeMutation.mutate()}
+                            disabled={analyzeMutation.isPending}
+                            title="Re-analisar com IA"
+                            className="p-2 bg-purple-100 hover:bg-purple-200 text-purple-600 rounded-xl transition-colors"
+                        >
                             {analyzeMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14} />}
                         </button>
                         <button onClick={() => setIsEditing(true)} title="Editar" className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors">
@@ -192,14 +253,27 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                     </div>
                 )}
 
-                {/* Cabeçalho */}
+                {/* ── Cabeçalho ─────────────────────────────────────────── */}
                 <div className="flex justify-between items-start mb-2 pr-24 md:pr-0">
                     <div className="flex flex-col items-start gap-2">
-                        {task.group && (
-                            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-widest border ${groupColors[task.group.color] || groupColors.gray}`}>
-                                <FolderOpen size={12} />{task.group.name}
-                            </span>
-                        )}
+                        {/* Badges: grupo + modo */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {task.group && (
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-widest border ${groupColors[task.group.color] || groupColors.gray}`}>
+                                    <FolderOpen size={12} />{task.group.name}
+                                </span>
+                            )}
+                            {isScheduled && (
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-widest border ${isInProgress
+                                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                        : 'bg-purple-100 text-purple-700 border-purple-200'
+                                    }`}>
+                                    <Timer size={10} />
+                                    {isInProgress ? 'Em andamento' : 'Agendado'}
+                                </span>
+                            )}
+                        </div>
+
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className={`text-lg font-bold ${isAlreadyCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                                 {task.title}
@@ -211,6 +285,7 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                             )}
                         </div>
                     </div>
+
                     {task.aiPriority && (
                         <span className={`hidden sm:flex px-3 py-1 rounded-full text-xs font-semibold border ${priorityColors[task.aiPriority]}`}>
                             {task.aiPriority}
@@ -218,7 +293,7 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                     )}
                 </div>
 
-                {/* Prioridade Mobile */}
+                {/* Prioridade mobile */}
                 {task.aiPriority && (
                     <span className={`sm:hidden inline-flex px-3 py-1 mt-1 mb-2 rounded-full text-xs font-semibold border ${priorityColors[task.aiPriority]}`}>
                         {task.aiPriority}
@@ -230,8 +305,8 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                     <p className="text-sm text-gray-500 mt-1">{task.description}</p>
                 )}
 
-                {/* Subtarefas */}
-                {totalSubtasks > 0 && (
+                {/* Subtarefas (apenas completion) */}
+                {!isScheduled && totalSubtasks > 0 && (
                     <div className="mt-4 space-y-1">
                         <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
                             <span className="font-semibold uppercase tracking-wider">Subtarefas</span>
@@ -272,33 +347,94 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                     <CompletionReport report={task.completionReport} completedAt={task.completedAt} />
                 )}
 
-                {/* Footer */}
+                {/* ── Footer ────────────────────────────────────────────── */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5 pt-4 border-t border-gray-200/50">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-                        <Calendar size={16} className="text-gray-400" />
-                        <span>{format(parseISO(task.dueDate), "dd/MM/yyyy", { locale: ptBR })}</span>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {/* Data */}
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                            <Calendar size={16} className="text-gray-400" />
+                            <span>
+                                {isScheduled
+                                    ? format(parseISO(task.dueDate), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                                    : format(parseISO(task.dueDate), "dd/MM/yyyy", { locale: ptBR })
+                                }
+                            </span>
+                        </div>
+
+                        {/* Status scheduled */}
+                        {isScheduled && !isAlreadyCompleted && (
+                            <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg
+                                bg-${scheduledStatus.color}-50 text-${scheduledStatus.color}-600 border border-${scheduledStatus.color}-200`}>
+                                {scheduledStatus.icon} {scheduledStatus.label}
+                            </span>
+                        )}
+
+                        {/* Duração scheduled */}
+                        {isScheduled && task.duration && !isAlreadyCompleted && (
+                            <span className="flex items-center gap-1 text-xs text-gray-400 font-medium">
+                                <Timer size={12} /> {formatDuration(task.duration)}
+                            </span>
+                        )}
                     </div>
+
+                    {/* Botão de ação principal */}
                     {!isAlreadyCompleted && (
-                        <button
-                            onClick={() => setIsExpanding(!isExpanding)}
-                            className="flex justify-center items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all text-sm font-semibold shadow-md active:scale-95"
-                        >
-                            <CheckCircle2 size={18} />
-                            Concluir
-                            <ChevronDown size={16} className={`transition-transform duration-300 ${isExpanding ? 'rotate-180' : ''}`} />
-                        </button>
+                        isScheduled ? (
+                            !task.startedAt ? (
+                                // Scheduled: confirmar início
+                                <button
+                                    onClick={() => startMutation.mutate()}
+                                    disabled={startMutation.isPending}
+                                    className="flex justify-center items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all text-sm font-semibold shadow-md shadow-purple-500/20 active:scale-95 disabled:opacity-60"
+                                >
+                                    {startMutation.isPending
+                                        ? <Loader2 size={16} className="animate-spin" />
+                                        : <PlayCircle size={18} />
+                                    }
+                                    Confirmar Início
+                                </button>
+                            ) : (
+                                // Scheduled em andamento: auto-conclusão info
+                                task.scheduledEndAt && (
+                                    <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                                        <Timer size={13} />
+                                        Conclui às {format(parseISO(task.scheduledEndAt), 'HH:mm')}
+                                    </div>
+                                )
+                            )
+                        ) : (
+                            // Completion: botão concluir
+                            <button
+                                onClick={() => setIsExpanding(!isExpanding)}
+                                className="flex justify-center items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all text-sm font-semibold shadow-md active:scale-95"
+                            >
+                                <CheckCircle2 size={18} />
+                                Concluir
+                                <ChevronDown size={16} className={`transition-transform duration-300 ${isExpanding ? 'rotate-180' : ''}`} />
+                            </button>
+                        )
                     )}
                 </div>
 
-                {/* Painel de conclusão */}
+                {/* ── Painel de conclusão (completion) ─────────────────── */}
                 <AnimatePresence>
-                    {isExpanding && !isAlreadyCompleted && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    {isExpanding && !isAlreadyCompleted && !isScheduled && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                        >
                             <div className="flex flex-col gap-4 mt-5 pt-5 border-t border-gray-200/50">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Data Real de Conclusão</label>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                        <input type="datetime-local" value={completedDate} onChange={e => setCompletedDate(e.target.value)} className="p-3 bg-white/50 border border-white focus:border-purple-400 rounded-xl text-sm w-full outline-none" />
+                                        <input
+                                            type="datetime-local"
+                                            value={completedDate}
+                                            onChange={e => setCompletedDate(e.target.value)}
+                                            className="p-3 bg-white/50 border border-white focus:border-purple-400 rounded-xl text-sm w-full outline-none"
+                                        />
                                         {isLate && (
                                             <span className="flex justify-center items-center gap-1.5 text-xs text-red-600 font-bold whitespace-nowrap bg-red-100 px-3 py-2 rounded-xl">
                                                 <AlertTriangle size={16} /> Atrasado
@@ -308,9 +444,17 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Observações da Entrega</label>
-                                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Como foi finalizar isso?" className="w-full p-3 bg-white/50 border border-white focus:border-purple-400 rounded-xl text-sm outline-none resize-none h-24" />
+                                    <textarea
+                                        value={notes}
+                                        onChange={e => setNotes(e.target.value)}
+                                        placeholder="Como foi finalizar isso?"
+                                        className="w-full p-3 bg-white/50 border border-white focus:border-purple-400 rounded-xl text-sm outline-none resize-none h-24"
+                                    />
                                 </div>
-                                <button onClick={handleComplete} className="w-full py-3 mt-2 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-xl hover:from-emerald-500 hover:to-emerald-600 transition-all font-bold text-sm shadow-lg shadow-emerald-500/30 flex justify-center items-center gap-2">
+                                <button
+                                    onClick={handleComplete}
+                                    className="w-full py-3 mt-2 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-xl hover:from-emerald-500 hover:to-emerald-600 transition-all font-bold text-sm shadow-lg shadow-emerald-500/30 flex justify-center items-center gap-2"
+                                >
                                     <CheckCircle2 size={20} />Confirmar Conclusão
                                 </button>
                             </div>
@@ -318,6 +462,8 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                     )}
                 </AnimatePresence>
             </motion.div>
+
+            {/* Modal de confirmação de delete */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDeleteConfirm(false)}>
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -327,7 +473,10 @@ export const TaskCard = forwardRef(({ task, onComplete }, ref) => {
                             <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
                                 Cancelar
                             </button>
-                            <button onClick={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors">
+                            <button
+                                onClick={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
+                                className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors"
+                            >
                                 Deletar
                             </button>
                         </div>
