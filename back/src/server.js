@@ -317,7 +317,10 @@ app.post('/tasks/analyze', aiLimiter, async (req, res) => {
             data: { aiPriority: r.aiPriority, aiSuggestion: r.aiSuggestion }
         })));
         res.json({ message: 'Analisadas!', updatedCount: aiResults.length });
-    } catch (e) { res.status(500).json({ error: 'Erro na análise IA' }); }
+    } catch (e) {
+        console.error('🔥 Erro na rota POST /tasks/analyze:', e);
+        res.status(500).json({ error: 'Erro na análise IA' });
+    }
 });
 
 app.post('/tasks/:id/analyze', async (req, res) => {
