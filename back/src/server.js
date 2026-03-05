@@ -106,12 +106,12 @@ app.post('/auth/login', authLimiter, async (req, res) => {
         // Token em cookie HttpOnly — não acessível via JavaScript (proteção XSS)
         res.cookie('agenda_token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // HTTPS apenas em produção
-            sameSite: 'strict',
+            secure: true, // sempre true (Railway usa HTTPS)
+            sameSite: 'none', // necessário para cross-domain (Vercel → Railway)
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
         });
 
-        res.json({ user: { id: user.id, name: user.name, email: user.email } });
+        res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Erro ao fazer login' });
@@ -185,8 +185,8 @@ app.get('/auth/confirm-email', async (req, res) => {
 app.post('/auth/logout', (req, res) => {
     res.clearCookie('agenda_token', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
+        secure: true,
+        sameSite: 'none'
     });
     res.json({ message: 'Logout realizado.' });
 });

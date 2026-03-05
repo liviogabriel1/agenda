@@ -11,30 +11,28 @@ export function AuthProvider({ children }) {
         const savedUser = localStorage.getItem('agenda_user');
         const token = localStorage.getItem('agenda_token');
 
-        if (savedUser && token) {
+        if (token) {
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        if (savedUser) {
             try {
                 setUser(JSON.parse(savedUser));
             } catch {
                 localStorage.removeItem('agenda_user');
-                localStorage.removeItem('agenda_token');
             }
         }
 
-        if (token) {
-            api.get('/auth/me')
-                .then(({ data }) => {
-                    setUser(data.user);
-                    localStorage.setItem('agenda_user', JSON.stringify(data.user));
-                })
-                .catch(() => {
-                    setUser(null);
-                    localStorage.removeItem('agenda_user');
-                    localStorage.removeItem('agenda_token');
-                })
-                .finally(() => setLoading(false));
-        } else {
-            setLoading(false);
-        }
+        api.get('/auth/me')
+            .then(({ data }) => {
+                setUser(data.user);
+                localStorage.setItem('agenda_user', JSON.stringify(data.user));
+            })
+            .catch(() => {
+                setUser(null);
+                localStorage.removeItem('agenda_user');
+            })
+            .finally(() => setLoading(false));
 
         const handleStorage = () => {
             const u = localStorage.getItem('agenda_user');
@@ -44,9 +42,12 @@ export function AuthProvider({ children }) {
         return () => window.removeEventListener('storage', handleStorage);
     }, []);
 
-    const login = (token, userData) => {
-        localStorage.setItem('agenda_token', token);
+    const login = (userData, token) => {
         localStorage.setItem('agenda_user', JSON.stringify(userData));
+        if (token) {
+            localStorage.setItem('agenda_token', token);
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
         setUser(userData);
     };
 
@@ -55,7 +56,6 @@ export function AuthProvider({ children }) {
             await api.post('/auth/logout');
         } catch {
         } finally {
-            localStorage.removeItem('agenda_token');
             localStorage.removeItem('agenda_user');
             setUser(null);
         }
