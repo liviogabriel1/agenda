@@ -16,14 +16,8 @@ async function sendWhatsApp(phone, message) {
 
     const response = await fetch(`${baseUrl}/message/sendText/${instance}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'apikey': apiKey
-        },
-        body: JSON.stringify({
-            number: formattedPhone,
-            text: message
-        })
+        headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+        body: JSON.stringify({ number: formattedPhone, text: message })
     });
 
     if (!response.ok) {
@@ -35,28 +29,27 @@ async function sendWhatsApp(phone, message) {
     return response.json();
 }
 
-// ─── Email (Nodemailer) ───────────────────────────────────────────────────────
+// ─── Email (Resend via SMTP) ──────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
     const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: Number(process.env.SMTP_PORT) || 465,
+        host: 'smtp.resend.com',
+        port: 465,
         secure: true,
-        family: 4, // força IPv4 (Railway não suporta IPv6 para SMTP)
         auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
+            user: 'resend',
+            pass: process.env.RESEND_API_KEY
         }
     });
 
     await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
+        from: `"Agenda Inteligente 📅" <onboarding@resend.dev>`,
         to,
         subject,
         html
     });
 }
 
-// ─── Dispatcher (escolhe o canal) ────────────────────────────────────────────
+// ─── Dispatcher ───────────────────────────────────────────────────────────────
 async function sendNotification(settings, { subject, whatsappText, emailHtml }) {
     const promises = [];
 
@@ -68,10 +61,7 @@ async function sendNotification(settings, { subject, whatsappText, emailHtml }) 
         promises.push(sendEmail(settings.email, subject, emailHtml || `<p>${whatsappText}</p>`));
     }
 
-
     const results = await Promise.allSettled(promises);
-
-    // Imprime o erro no terminal se a notificação falhar
     results.forEach(result => {
         if (result.status === 'rejected') {
             console.error('❌ Falha ao enviar notificação:', result.reason);
@@ -79,7 +69,7 @@ async function sendNotification(settings, { subject, whatsappText, emailHtml }) 
     });
 }
 
-// ─── Templates de mensagem ────────────────────────────────────────────────────
+// ─── Templates ────────────────────────────────────────────────────────────────
 function buildDueTodayMessage(tasks) {
     const list = tasks.map(t => `  • ${t.title}`).join('\n');
     return {
@@ -114,10 +104,4 @@ function buildCompletionMessage(task) {
     };
 }
 
-module.exports = {
-    sendNotification,
-    buildDueTodayMessage,
-    buildOverdueMessage,
-    buildDailySummaryMessage,
-    buildCompletionMessage
-};
+module.exports = { sendNotification, buildDueTodayMessage, buildOverdueMessage, buildDailySummaryMessage, buildCompletionMessage };
