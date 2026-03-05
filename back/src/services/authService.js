@@ -1,6 +1,5 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 function generateToken(userId) {
@@ -19,25 +18,35 @@ function generateResetToken() {
     return crypto.randomBytes(32).toString('hex');
 }
 
-function createMailTransport() {
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: false,
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        }
+async function sendBrevoEmail({ to, toName, subject, html }) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+            sender: { name: 'Agenda Inteligente', email: process.env.SMTP_USER },
+            to: [{ email: to, name: toName || to }],
+            subject,
+            htmlContent: html
+        })
     });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Brevo API error: ${err}`);
+    }
+
+    return response.json();
 }
 
 async function sendResetEmail(email, token, name) {
-    const transporter = createMailTransport();
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
 
-    await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
+    await sendBrevoEmail({
         to: email,
+        toName: name,
         subject: '🔑 Redefinir sua senha — Agenda Inteligente',
         html: `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f9f5ff;border-radius:16px;">
@@ -54,12 +63,11 @@ async function sendResetEmail(email, token, name) {
 }
 
 async function sendConfirmationEmail(email, token, name) {
-    const transporter = createMailTransport();
     const confirmUrl = `${process.env.BACKEND_URL || 'http://localhost:3333'}/auth/confirm-email?token=${token}`;
 
-    await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
+    await sendBrevoEmail({
         to: email,
+        toName: name,
         subject: '✅ Confirme seu email — Agenda Inteligente',
         html: `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f9f5ff;border-radius:16px;">

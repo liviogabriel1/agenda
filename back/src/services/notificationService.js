@@ -1,5 +1,3 @@
-const nodemailer = require('nodemailer');
-
 async function sendWhatsApp(phone, message) {
     const baseUrl = process.env.EVOLUTION_API_URL;
     const apiKey = process.env.EVOLUTION_API_KEY;
@@ -29,22 +27,24 @@ async function sendWhatsApp(phone, message) {
 }
 
 async function sendEmail(to, subject, html) {
-    const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: false,
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        }
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+            sender: { name: 'Agenda Inteligente', email: process.env.SMTP_USER },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html
+        })
     });
 
-    await transporter.sendMail({
-        from: `"Agenda Inteligente 📅" <${process.env.SMTP_USER}>`,
-        to,
-        subject,
-        html
-    });
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Brevo API error: ${err}`);
+    }
 }
 
 async function sendNotification(settings, { subject, whatsappText, emailHtml }) {
